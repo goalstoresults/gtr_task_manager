@@ -2,76 +2,51 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>GTR Task Manager v1.2</title>
+  <title>GTR Task Manager v1.3</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body {
-      font-family: system-ui, sans-serif;
-      background: #f6f7f9;
-      margin: 0;
-      padding: 20px;
-    }
-    .card {
-      background: white;
-      border-radius: 12px;
-      padding: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,.1);
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .badge {
-      background: #eef2ff;
-      color: #3730a3;
-      border-radius: 8px;
-      padding: 4px 8px;
-      font-size: 14px;
-    }
-    .btn {
-      text-decoration: none;
-      background: #111827;
-      color: white;
-      padding: 8px 12px;
-      border-radius: 8px;
-    }
-    select {
-      padding: 6px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-    }
+    body { font-family: system-ui, sans-serif; background: #f6f7f9; margin: 0; padding: 20px; }
+    .card { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.1); display: flex; align-items: center; gap: 12px; }
+    .badge { background: #eef2ff; color: #3730a3; border-radius: 8px; padding: 4px 8px; font-size: 14px; }
+    .btn { text-decoration: none; background: #111827; color: white; padding: 8px 12px; border-radius: 8px; }
+    select { padding: 6px; border-radius: 6px; border: 1px solid #ccc; }
   </style>
 </head>
 <body>
   <div class="card">
-    <strong>GTR Task Manager v1.2</strong>
+    <strong>GTR Task Manager v1.3</strong>
     <span id="modeBadge" class="badge"></span>
     <label>Client</label>
     <select id="clientSelect"></select>
-    <span id="clientBadge" class="badge"></span>
     <a id="addTaskBtn" class="btn" href="#">Add Task</a>
   </div>
 
   <script>
     // === CONFIG ===
-    const GTR_ID = "hezFHREjxhfwcOdxYOcc";  
+    const GTR_ID = "hezFHREjxhfwcOdxYOcc";
     const WORKER_BASE = "https://gtr-task-add.dennis-e64.workers.dev";
 
     // === STATE ===
     const url = new URL(window.location.href);
     const cid = (url.searchParams.get("cid") || "").trim();
-    const isAdmin = cid === (GTR_ID || "").trim();
+    const adminFlag = url.searchParams.get("admin") === "1"; // persist admin mode
+    const isAdmin = adminFlag || (cid === (GTR_ID || "").trim());
 
     const clientSelect = document.getElementById("clientSelect");
-    const clientBadge = document.getElementById("clientBadge");
     const modeBadge = document.getElementById("modeBadge");
     const addTaskBtn = document.getElementById("addTaskBtn");
 
-    if (isAdmin) {
+    if (!cid) {
+      // require cid
+      clientSelect.innerHTML = '<option value="">(cid required in URL)</option>';
+      clientSelect.disabled = true;
+    } else if (isAdmin) {
       modeBadge.textContent = "Admin mode";
       loadClientOptions();
     } else {
       modeBadge.textContent = "Client view";
       loadSingleClientLabel(cid);
+      clientSelect.disabled = true;
     }
 
     addTaskBtn.href = `${WORKER_BASE}/new?cid=${encodeURIComponent(cid)}`;
@@ -79,16 +54,14 @@
     // === FUNCTIONS ===
     async function loadClientOptions() {
       try {
-        const r = await fetch(`${WORKER_BASE}/clients/options?cid=${encodeURIComponent(cid)}&v=1`);
+        const r = await fetch(`${WORKER_BASE}/clients/options?cid=${encodeURIComponent(GTR_ID)}&v=1`);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const options = await r.json();
-        console.log("Loaded client options:", options);
         renderClientSelect(options, cid);
       } catch (err) {
         console.error("Error loading client options:", err);
         clientSelect.innerHTML = `<option value="${cid}">(failed to load)</option>`;
         clientSelect.disabled = false;
-        clientBadge.textContent = cid;
       }
     }
 
@@ -101,10 +74,8 @@
         clientSelect.innerHTML = "";
         const opt = document.createElement("option");
         opt.value = cid;
-        opt.textContent = label;  // show label, not ID
+        opt.textContent = label;
         clientSelect.appendChild(opt);
-        clientSelect.disabled = true;
-        clientBadge.textContent = label;
       } catch (err) {
         console.error("Error loading client label:", err);
       }
@@ -112,12 +83,7 @@
 
     function renderClientSelect(options, currentCid) {
       if (!Array.isArray(options) || options.length === 0) {
-        console.warn("No options returned, fallback to currentCid only");
-        clientSelect.innerHTML = "";
-        const opt = document.createElement("option");
-        opt.value = currentCid;
-        opt.textContent = clientBadge.textContent || currentCid;
-        clientSelect.appendChild(opt);
+        clientSelect.innerHTML = `<option value="${currentCid}">${currentCid}</option>`;
         clientSelect.disabled = false;
         return;
       }
@@ -131,18 +97,18 @@
         `).join('');
 
       clientSelect.disabled = false;
-      const current = options.find(o => o.gtr_contact_id===currentCid);
-      clientBadge.textContent = current ? current.client_label : currentCid;
 
-      // When user changes selection, reload page with new cid
+      // Persist admin mode when switching clients
       clientSelect.onchange = (e) => {
         const next = e.target.value;
         if (!next) return;
         const u = new URL(location.href);
         u.searchParams.set("cid", next);
+        u.searchParams.set("admin", "1"); // keep admin on
         location.href = u.toString();
       };
     }
   </script>
 </body>
 </html>
+
