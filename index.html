@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GTR Task Manager</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --brand: #111827;
+      --accent: #2563eb;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: var(--text); background: var(--bg); }
+    .container { max-width: 1000px; margin: 0 auto; padding: 16px; }
+    .topbar { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; justify-content: space-between; }
+    .brand { font-weight: 800; letter-spacing: 0.2px; }
+    .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    label { font-size: 12px; color: var(--muted); }
+    select, button, .badge, .input { border-radius: 10px; border: 1px solid var(--border); background: #fff; padding: 9px 12px; font-size: 14px; }
+    select:disabled { background: #f3f4f6; color: #6b7280; }
+    .badge { display: inline-block; background: #eef2ff; color: #3730a3; border-color: transparent; }
+    .btn { background: var(--brand); color: #fff; border: none; cursor: pointer; }
+    .btn:hover { opacity: 0.95; }
+    .btn.secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-top: 16px; }
+    .hint { color: var(--muted); font-size: 12px; }
+    .spacer { flex: 1; }
+    .danger { color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <div class="row">
+        <div class="brand">GTR Task Manager</div>
+        <div class="hint" id="modeHint"></div>
+      </div>
+      <div class="row">
+        <label>Client</label>
+        <select id="clientSelect" style="min-width: 220px"></select>
+        <span id="clientBadge" class="badge" style="display:none"></span>
+      </div>
+      <div class="row">
+        <a id="addTaskLink" class="btn" href="#">Add Task</a>
+        <!-- Future: uncomment when endpoints are ready
+        <a id="attentionLink" class="btn secondary" href="#">Attention</a>
+        <a id="activeLink" class="btn secondary" href="#">Active</a>
+        <a id="overdueLink" class="btn secondary" href="#">Overdue</a>
+        -->
+      </div>
+    </div>
+
+    <div class="card" id="statusCard" style="display:none"></div>
+  </div>
+
+  <script>
+    // ======= CONFIG – set these before deploying =======
+    const GTR_ID = "YOUR_GTR_CONTACT_ID";                   // <-- set to your own clients.gtr_contact_id
+    const WORKER_BASE = "https://your-worker.workers.dev";  // <-- set to your Worker origin
+    // ===================================================
+
+    const qs = new URLSearchParams(location.search);
+    const cid = qs.get('cid');
+    const isAdmin = cid === GTR_ID;
+
+    const clientSelect = document.getElementById('clientSelect');
+    const clientBadge  = document.getElementById('clientBadge');
+    const modeHint     = document.getElementById('modeHint');
+    const statusCard   = document.getElementById('statusCard');
+    const addTaskLink  = document.getElementById('addTaskLink');
+
+    // Require cid; show guidance if missing
+    if (!cid) {
+      showStatus(`
+        <div class="row" style="justify-content:space-between; align-items:center">
+          <div>
+            <div class="danger"><strong>cid is required</strong></div>
+            <div class="hint">Open this page with <code>?cid=&lt;gtr_contact_id&gt;</code>. For admin view, use your GTR id.</div>
+          </div>
+        </div>
+      `);
+      clientSelect.style.display = 'none';
+      clientBadge.style.display  = 'none';
+      addTaskLink.classList.add('disabled');
+      addTaskLink.href = '#';
+    } else {
+      // Wire buttons for current cid
+      addTaskLink.href = `${WORKER_BASE}/new?cid=${encodeURIComponent(cid)}`;
+      // Future buttons (uncomment once Worker endpoints exist)
+      // document.getElementById('attentionLink').href = `${WORKER_BASE}/tasks?view=attention&cid=${encodeURIComponent(cid)}`;
+      // document.getElementById('activeLink').href    = `${WORKER_BASE}/tasks?view=active&cid=${encodeURIComponent(cid)}`;
+      // document.getElementById('overdueLink').href   = `${WORKER_BASE}/tasks?view=overdue&cid=${encodeURIComponent(cid)}`;
+
+      initClientUI().catch(err => {
+        showStatus(`<div class="danger"><strong>Error:</strong> ${escapeHtml(String(err))}</div>`);
+      });
+    }
+
+    async function initClientUI() {
+      const label = await fetchClientLabel(cid);
+
+      if (isAdmin) {
+        modeHint.textContent = 'Admin mode';
+        clientBadge.style.display = 'none';
+        clientSelect.style.display = '';
+        clientSelect.disabled = false;
+
+        const options = await fetchClientOptions(GTR_ID);
+        renderClientSelect(options, cid);
+        clientSelect.addEventListener('change', (e) => {
+          const next = e.target.value;
+          if (next) {
+            const u = new URL(location.href);
+            u.searchParams.set('cid', next);
+            location.href = u.toString();
+          }
+        });
+      } else {
+        modeHint.textContent = 'Client view';
+        clientSelect.style.display = '';
+        clientSelect.disabled = true;
+        clientSelect.innerHTML = '';
+
+        clientBadge.style.display = '';
+        clientBadge.textContent = label || cid;
+
+        // Render a disabled select with the single option for visual consistency
+        const opt = document.createElement('option');
+        opt.value = cid;
+        opt.textContent = label || cid;
+        clientSelect.appendChild(opt);
+      }
+    }
+
+    async function fetchClientLabel(cid) {
+      try {
+        const r = await fetch(`${WORKER_BASE}/clients/label?cid=${encodeURIComponent(cid)}`, { credentials: 'omit' });
+        if (!r.ok) return cid; // fallback
+        const data = await r.json();
+        return data.label || cid;
+      } catch { return cid; }
+    }
+
+    async function fetchClientOptions(adminCid) {
+      const r = await fetch(`${WORKER_BASE}/clients/options?cid=${encodeURIComponent(adminCid)}`, { credentials: 'omit' });
+      if (!r.ok) throw new Error('Failed to load client options');
+      const list = await r.json();
+      // Expecting [{ gtr_contact_id, client_label }]
+      return Array.isArray(list) ? list : [];
+    }
+
+    function renderClientSelect(options, currentCid) {
+      clientSelect.innerHTML = '<option value="">— Select client —</option>' +
+        options.map(o => `<option value="${escapeHtml(o.gtr_contact_id)}" ${o.gtr_contact_id===currentCid?'selected':''}>${escapeHtml(o.client_label || o.gtr_contact_id)}</option>`).join('');
+    }
+
+    function showStatus(html) {
+      statusCard.style.display = '';
+      statusCard.innerHTML = html;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+    }
+  </script>
+</body>
+</html>
