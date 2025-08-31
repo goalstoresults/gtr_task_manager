@@ -2,23 +2,22 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>GTR Task Manager v1.6</title>
+  <title>GTR Task Manager v1.7</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body { font-family: system-ui, sans-serif; background: #f6f7f9; margin: 0; padding: 20px; }
     .card { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.1); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .badge { background: #eef2ff; color: #3730a3; border-radius: 8px; padding: 4px 8px; font-size: 14px; }
-    .btn { text-decoration: none; background: #111827; color: white; padding: 8px 12px; border-radius: 8px; }
+    .link { color:#111827; text-decoration:none; border:1px solid #e5e7eb; padding:6px 10px; border-radius:8px; background:#fff; }
     select { padding: 6px; border-radius: 6px; border: 1px solid #ccc; }
     .spacer { flex: 1; }
     .panel { margin-top: 16px; }
     iframe { width: 100%; height: 72vh; border: 1px solid #e5e7eb; border-radius: 12px; background:#fff; }
-    a.link { color:#111827; text-decoration:none; border:1px solid #e5e7eb; padding:6px 10px; border-radius:8px; background:#fff; }
   </style>
 </head>
 <body>
   <div class="card">
-    <strong>GTR Task Manager v1.6</strong>
+    <strong>GTR Task Manager v1.7</strong>
     <span id="modeBadge" class="badge"></span>
 
     <label>Client</label>
@@ -28,9 +27,7 @@
     <select id="viewSelect">
       <option value="active" selected>Active</option>
       <option value="attention">Attention</option>
-      <!-- enable if/when you add the SQL & worker support:
-      <option value="done">Done</option>
-      -->
+      <!-- <option value="all">All</option> -->
     </select>
 
     <span class="spacer"></span>
@@ -43,7 +40,7 @@
 
   <script>
     // === CONFIG ===
-    const GTR_ID = "hezFHREjxhfwcOdxYOcc";
+    const GTR_ID = "hezFHREjxhfwcOdxYOcc"; // your admin CID
     const WORKER_BASE = "https://gtr-task-add.dennis-e64.workers.dev";
 
     // === STATE ===
@@ -96,7 +93,6 @@
 
     async function loadClientOptions() {
       try {
-        // Ask the worker for all clients (using your GTR admin id)
         const r = await fetch(`${WORKER_BASE}/clients/options?cid=${encodeURIComponent(GTR_ID)}&v=1`);
         const options = await r.json();
         renderClientSelect(options, cid);
@@ -140,4 +136,3 @@
   </script>
 </body>
 </html>
-
