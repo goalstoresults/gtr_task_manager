@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>GTR Task Manager v1.4</title>
+  <title>GTR Task Manager v1.6</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body { font-family: system-ui, sans-serif; background: #f6f7f9; margin: 0; padding: 20px; }
@@ -10,13 +10,15 @@
     .badge { background: #eef2ff; color: #3730a3; border-radius: 8px; padding: 4px 8px; font-size: 14px; }
     .btn { text-decoration: none; background: #111827; color: white; padding: 8px 12px; border-radius: 8px; }
     select { padding: 6px; border-radius: 6px; border: 1px solid #ccc; }
+    .spacer { flex: 1; }
     .panel { margin-top: 16px; }
-    iframe { width: 100%; height: 70vh; border: 1px solid #e5e7eb; border-radius: 12px; background:#fff; }
+    iframe { width: 100%; height: 72vh; border: 1px solid #e5e7eb; border-radius: 12px; background:#fff; }
+    a.link { color:#111827; text-decoration:none; border:1px solid #e5e7eb; padding:6px 10px; border-radius:8px; background:#fff; }
   </style>
 </head>
 <body>
   <div class="card">
-    <strong>GTR Task Manager v1.4</strong>
+    <strong>GTR Task Manager v1.6</strong>
     <span id="modeBadge" class="badge"></span>
 
     <label>Client</label>
@@ -26,10 +28,13 @@
     <select id="viewSelect">
       <option value="active" selected>Active</option>
       <option value="attention">Attention</option>
+      <!-- enable if/when you add the SQL & worker support:
+      <option value="done">Done</option>
+      -->
     </select>
 
-    <a id="addTaskBtn" class="btn" href="#">Add Task</a>
-    <a id="openInNewTab" class="btn" href="#" target="_blank" rel="noopener">Open List</a>
+    <span class="spacer"></span>
+    <a id="openFull" class="link" href="#" target="_blank" rel="noopener">Open Full</a>
   </div>
 
   <div class="panel">
@@ -51,9 +56,8 @@
     const clientSelect = document.getElementById("clientSelect");
     const viewSelect   = document.getElementById("viewSelect");
     const modeBadge    = document.getElementById("modeBadge");
-    const addTaskBtn   = document.getElementById("addTaskBtn");
-    const openInNewTab = document.getElementById("openInNewTab");
     const listFrame    = document.getElementById("listFrame");
+    const openFull     = document.getElementById("openFull");
 
     // === INIT ===
     if (!cid) {
@@ -69,39 +73,36 @@
       clientSelect.disabled = true;
     }
 
-    // Wire main actions
-    addTaskBtn.href   = `${WORKER_BASE}/new?cid=${encodeURIComponent(cid)}${isAdmin ? '&admin=1' : ''}`;
-    openInNewTab.href = buildTasksUrl(viewSelect.value, cid, isAdmin);
-
-    // Load initial list
+    // initial load
     setListSrc();
 
-    // === FUNCTIONS ===
-    function buildTasksUrl(view, cid, keepAdmin) {
+    // events
+    viewSelect.addEventListener("change", setListSrc);
+
+    // === HELPERS ===
+    function buildTasksUrl(view, cid, keepAdmin, embed=false) {
       const a = keepAdmin ? "&admin=1" : "";
-      return `${WORKER_BASE}/tasks?view=${encodeURIComponent(view)}&cid=${encodeURIComponent(cid)}${a}`;
+      const e = embed ? "&embed=1" : "";
+      return `${WORKER_BASE}/tasks?view=${encodeURIComponent(view)}&cid=${encodeURIComponent(cid)}${a}${e}`;
     }
 
     function setListSrc() {
       if (!cid) return;
       const view = viewSelect.value || "active";
-      const src = buildTasksUrl(view, cid, isAdmin);
+      const src = buildTasksUrl(view, cid, isAdmin, /*embed*/ true);
       listFrame.src = src;
-      openInNewTab.href = src;
+      openFull.href = buildTasksUrl(view, cid, isAdmin, /*embed*/ false);
     }
-
-    viewSelect.addEventListener("change", setListSrc);
 
     async function loadClientOptions() {
       try {
-        // Always ask the Worker as GTR admin to get the full list
+        // Ask the worker for all clients (using your GTR admin id)
         const r = await fetch(`${WORKER_BASE}/clients/options?cid=${encodeURIComponent(GTR_ID)}&v=1`);
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const options = await r.json();
         renderClientSelect(options, cid);
       } catch (err) {
-        console.error("Error loading client options:", err);
-        clientSelect.innerHTML = `<option value="${cid}">(failed to load)</option>`;
+        console.error(err);
+        clientSelect.innerHTML = `<option value="${cid}">${cid}</option>`;
         clientSelect.disabled = false;
       }
     }
@@ -109,25 +110,15 @@
     async function loadSingleClientLabel(cid) {
       try {
         const r = await fetch(`${WORKER_BASE}/clients/label?cid=${encodeURIComponent(cid)}`);
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const data = await r.json();
         const label = data.label || cid;
-        clientSelect.innerHTML = "";
-        const opt = document.createElement("option");
-        opt.value = cid;
-        opt.textContent = label;
-        clientSelect.appendChild(opt);
+        clientSelect.innerHTML = `<option value="${cid}">${label}</option>`;
       } catch (err) {
-        console.error("Error loading client label:", err);
+        console.error(err);
       }
     }
 
     function renderClientSelect(options, currentCid) {
-      if (!Array.isArray(options) || options.length === 0) {
-        clientSelect.innerHTML = `<option value="${currentCid}">${currentCid}</option>`;
-        clientSelect.disabled = false;
-        return;
-      }
       clientSelect.innerHTML =
         '<option value="">— Select client —</option>' +
         options.map(o => `
@@ -149,3 +140,4 @@
   </script>
 </body>
 </html>
+
